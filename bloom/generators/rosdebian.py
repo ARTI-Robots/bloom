@@ -45,12 +45,26 @@ from bloom.generators.debian.generate_cmd import prepare_arguments
 from bloom.logging import info
 
 from bloom.util import get_distro_list_prompt
-
+import os
+import re
 
 class RosDebianGenerator(DebianGenerator):
     title = 'rosdebian'
     description = "Generates debians tailored for the given rosdistro"
-    default_install_prefix = '/opt/ros/'
+
+    @staticmethod
+    def getDefaultInstallPrefix(rosdistro):
+        ros_package_path = os.environ.get('ROS_PACKAGE_PATH')
+        if ros_package_path is not None:
+            # split the ros package path into workspace overlays
+            workspaces = ros_package_path.split(":")
+            # use the first workspace as it the workspace with the highest overlay
+            if len(workspaces) > 0:
+                top_moste_workspace = workspaces[0]
+                if re.match('.*/src$', top_moste_workspace) is not None:
+                    return re.sub('/src$', '/devel', top_moste_workspace)
+                return workspaces[0]
+        return '/opt/ros/' + rosdistro
 
     def prepare_arguments(self, parser):
         # Add command line arguments for this generator
@@ -60,7 +74,7 @@ class RosDebianGenerator(DebianGenerator):
 
     def handle_arguments(self, args):
         self.rosdistro = args.rosdistro
-        self.default_install_prefix += self.rosdistro
+        self.default_install_prefix = self.getDefaultInstallPrefix(self.rosdistro)
         ret = DebianGenerator.handle_arguments(self, args)
         return ret
 
@@ -142,7 +156,7 @@ def get_subs(pkg, os_name, os_version, ros_distro, native):
         os_name,
         os_version,
         ros_distro,
-        RosDebianGenerator.default_install_prefix + ros_distro,
+        RosDebianGenerator.getDefaultInstallPrefix(ros_distro),
         native=native
     )
     subs['Package'] = rosify_package_name(subs['Package'], ros_distro)
